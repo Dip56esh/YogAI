@@ -1,0 +1,140 @@
+{% extends "yoga/base.html" %}
+{% load static %}
+
+{% block title %}Yoga Session{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 p-4">
+  <div class="max-w-7xl mx-auto">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      
+      <!-- Main Webcam Panel -->
+      <div class="lg:col-span-3">
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+          <div class="aspect-video bg-gray-900 relative">
+            <video id="webcam" autoplay muted class="w-full h-full object-cover"></video>
+            
+            <div id="overlay" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 hidden">
+              <div class="text-center text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18" />
+                </svg>
+                <p class="text-lg">Click Start Session to begin</p>
+              </div>
+            </div>
+            
+            <div id="liveBadge" class="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-medium animate-pulse hidden">
+              LIVE
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="p-4 bg-white border-t flex items-center justify-center space-x-4">
+            <button id="toggleSession" class="flex items-center px-6 py-3 rounded-lg font-medium bg-green-500 text-white hover:bg-green-600 transition-all duration-200">
+              Start Session
+            </button>
+
+            <button id="switchCamera" class="flex items-center px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+              Switch Camera
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side Panel -->
+      <div class="space-y-6">
+        <!-- Session Timer -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Session Time</h3>
+          </div>
+          <div id="sessionTimer" class="text-3xl font-bold text-center text-green-600">00:00</div>
+        </div>
+
+        <!-- Current Pose -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Current Pose</h3>
+          <div class="text-center">
+            <div id="currentPose" class="text-2xl font-bold text-gray-900 mb-2">—</div>
+            <div class="text-sm text-gray-500 mb-4">Confidence: <span id="confidence">0</span>%</div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div id="confidenceBar" class="h-2 rounded-full bg-red-500 transition-all duration-500" style="width:0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feedback -->
+        <div id="feedbackCard" class="rounded-lg shadow-lg p-6 border-2 border-gray-300 transition-all duration-300">
+          <h3 class="text-lg font-semibold mb-3">Real-time Feedback</h3>
+          <p id="feedback" class="text-sm leading-relaxed">No session active.</p>
+        </div>
+
+        <!-- Guided Mode -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Guided Practice</h3>
+          <button class="w-full bg-gradient-to-r from-green-500 to-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:from-green-600 hover:to-blue-700 transition-all duration-200">
+            Practice Warrior Pose
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- JS -->
+<script>
+let sessionActive = false;
+let sessionTime = 0;
+let timerInterval;
+const videoEl = document.getElementById("webcam");
+const toggleBtn = document.getElementById("toggleSession");
+const overlay = document.getElementById("overlay");
+const liveBadge = document.getElementById("liveBadge");
+const timerEl = document.getElementById("sessionTimer");
+
+async function startWebcam() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    videoEl.srcObject = stream;
+  } catch (err) {
+    console.log("Webcam access denied or not available");
+  }
+}
+
+function formatTime(seconds) {
+  const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const secs = String(seconds % 60).padStart(2, '0');
+  return `${mins}:${secs}`;
+}
+
+toggleBtn.addEventListener("click", () => {
+  sessionActive = !sessionActive;
+  if (sessionActive) {
+    startWebcam();
+    overlay.classList.add("hidden");
+    liveBadge.classList.remove("hidden");
+    toggleBtn.textContent = "Stop Session";
+    toggleBtn.classList.remove("bg-green-500", "hover:bg-green-600");
+    toggleBtn.classList.add("bg-red-500", "hover:bg-red-600");
+    sessionTime = 0;
+    timerInterval = setInterval(() => {
+      sessionTime++;
+      timerEl.textContent = formatTime(sessionTime);
+    }, 1000);
+  } else {
+    const stream = videoEl.srcObject;
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    videoEl.srcObject = null;
+    overlay.classList.remove("hidden");
+    liveBadge.classList.add("hidden");
+    toggleBtn.textContent = "Start Session";
+    toggleBtn.classList.add("bg-green-500", "hover:bg-green-600");
+    toggleBtn.classList.remove("bg-red-500", "hover:bg-red-600");
+    clearInterval(timerInterval);
+    timerEl.textContent = "00:00";
+  }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "yoga/base.html" %}
+{% block title %}Profile - Yoga AI{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+
+  <!-- Left Panel: User Info -->
+  <div class="bg-white shadow rounded-lg p-6">
+    <div class="flex flex-col items-center">
+      <img src="{{ user.profile.avatar.url }}" alt="Profile Picture" class="w-32 h-32 rounded-full mb-4 object-cover">
+      <h2 class="text-2xl font-semibold mb-1">{{ user.username }}</h2>
+      <p class="text-gray-600 mb-2">{{ user.profile.full_name }}</p>
+      <p class="text-gray-500 text-sm mb-4">{{ user.profile.bio }}</p>
+      <div class="flex space-x-4">
+        <a href="{% url 'yoga:edit_profile' %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">Edit Profile</a>
+        <!-- <a href="{% url 'yoga:logout' %}" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg">Logout</a> -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Middle Panel: Calendar -->
+  <div class="bg-white shadow rounded-lg p-6">
+    <h3 class="text-xl font-bold mb-4 text-center">Practice Calendar</h3>
+    <div class="grid grid-cols-7 gap-2 text-center">
+      {% for day in calendar_days %}
+        <div class="p-2 rounded {{ day.practiced|yesno:'bg-green-300 bg-gray-200' }}">
+          {{ day.label }}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Right Panel: Stats & Analytics -->
+  <div class="bg-white shadow rounded-lg p-6">
+    <h3 class="text-xl font-bold mb-4 text-center">Stats & Analytics</h3>
+    <div class="space-y-4">
+      <div class="bg-gray-50 p-4 rounded-lg border text-center">
+        <h4 class="text-lg font-semibold">{{ total_sessions }}</h4>
+        <p class="text-gray-600">Total Sessions</p>
+      </div>
+      <div class="bg-gray-50 p-4 rounded-lg border text-center">
+        <h4 class="text-lg font-semibold">{{ longest_streak }} days</h4>
+        <p class="text-gray-600">Longest Streak</p>
+      </div>
+      <div class="bg-gray-50 p-4 rounded-lg border text-center">
+        <h4 class="text-lg font-semibold">{{ total_hours }} hrs</h4>
+        <p class="text-gray-600">Practice Time</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

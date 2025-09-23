@@ -1,0 +1,97 @@
+{% extends "yoga/base.html" %}
+{% load static %}
+{% block title %}Welcome{% endblock %}
+
+{% block content %}
+
+<!-- Hero Section -->
+<section class="text-center py-20 bg-gradient-to-r from-blue-100 to-blue-200">
+  <h1 class="text-5xl font-bold text-blue-700 mb-4">Welcome to YogAI</h1>
+  <p class="text-lg text-gray-700 mb-6">
+    Track your yoga journey, explore poses, and improve your wellness.
+  </p>
+  {% if user.is_authenticated %}
+  <a href="{% url 'yoga:poses' %}" 
+     class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg shadow">
+     Get Started ->
+  </a>
+  {%else%}
+  <a href="{% url 'yoga:signup' %}" 
+     class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg shadow">
+     Get Started ->
+  </a>
+  {%endif%}
+</section>
+
+<!-- Services / Features Section -->
+<section class="container mx-auto py-16 px-6">
+  <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">Our Features</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+      <img src="{% static 'yoga/images/pose_icon.svg' %}" alt="Yoga Poses" class="w-20 h-20 mx-auto mb-4">
+      <h3 class="text-xl font-semibold mb-2">Explore Yoga Poses</h3>
+      <p class="text-gray-600 text-sm">
+        Access a curated library of 50+ yoga poses with instructions and benefits.
+      </p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+      <img src="{% static 'yoga/images/calendar_icon.svg' %}" alt="Track Progress" class="w-20 h-20 mx-auto mb-4">
+      <h3 class="text-xl font-semibold mb-2">Track Your Progress</h3>
+      <p class="text-gray-600 text-sm">
+        Monitor your daily practice with a smart calendar and analytics.
+      </p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+      <img src="{% static 'yoga/images/analytics_icon.svg' %}" alt="Analytics" class="w-20 h-20 mx-auto mb-4">
+      <h3 class="text-xl font-semibold mb-2">Personalized Analytics</h3>
+      <p class="text-gray-600 text-sm">
+        Receive insights and suggestions to improve your yoga routine.
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- Graphical Images / Illustrations -->
+<section class="container mx-auto py-16 px-6">
+  <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">Yoga in Action</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <img src="{% static 'yoga/images/hero1.jpg' %}" alt="Yoga Pose 1" class="rounded-lg shadow-md w-full h-64 object-cover">
+    <img src="{% static 'yoga/images/hero2.jpg' %}" alt="Yoga Pose 2" class="rounded-lg shadow-md w-full h-64 object-cover">
+    <img src="{% static 'yoga/images/hero3.jpg' %}" alt="Yoga Pose 3" class="rounded-lg shadow-md w-full h-64 object-cover">
+  </div>
+</section>
+
+<!-- Testimonials Section -->
+<section class="bg-blue-50 py-16 px-6">
+  <h2 class="text-3xl font-bold text-center mb-12 text-gray-800">What Our Users Say</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+      <p class="text-gray-600 italic mb-4">
+        "YogAI helped me maintain a consistent yoga routine. The analytics motivate me to improve every day!"
+      </p>
+      <h3 class="text-green-700 font-semibold">– Dipesh D.</h3>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+      <p class="text-gray-600 italic mb-4">
+        "The yoga poses library is amazing! I can follow the instructions easily and track my progress."
+      </p>
+      <h3 class="text-green-700 font-semibold">– Sita M.</h3>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6 text-center">
+      <p class="text-gray-600 italic mb-4">
+        "I love the practice calendar! It keeps me accountable and improves my wellness journey."
+      </p>
+      <h3 class="text-green-700 font-semibold">– Ramesh K.</h3>
+    </div>
+
+  </div>
+</section>
+
+{% endblock %}
