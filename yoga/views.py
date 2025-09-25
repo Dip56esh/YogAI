@@ -8,6 +8,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from django.utils import timezone
 from datetime import timedelta
+import calendar
+from datetime import date, datetime
 
 def landing(request):
     top_poses = Pose.objects.all()[:4]
@@ -38,15 +40,56 @@ class CustomLoginView(LoginView):
     template_name = 'yoga/login.html'
 
 @login_required
+# views.py
 def profile_view(request):
     profile = request.user.profile
-    practices = request.user.practices.all()[:30]
+
+    # full queryset for logic
+    practices_qs = request.user.practices.all()
+
+    # slice only for display if you need
+    practices = practices_qs[:30]
+
+    # collect distinct days practiced
+    practiced_days = set(practices_qs.values_list("date", flat=True))
+
     practice_form = PracticeForm()
-    return render(request, 'yoga/profile.html', {
-        'profile': profile,
-        'practices': practices,
-        'practice_form': practice_form
+
+     # Get month/year from query params or use current
+    month = int(request.GET.get("month", date.today().month))
+    year = int(request.GET.get("year", date.today().year))
+    today = date.today()
+
+    cal = calendar.Calendar(firstweekday=6)
+    month_days = cal.itermonthdates(year, month)
+
+    # Calendar setup
+    calendar_days = []
+    for day in month_days:
+        calendar_days.append({
+            "label": day.day,
+            "in_month": day.month == month,
+            "practiced": day in practiced_days and day <= today,
+            "is_today": day == today,
+            "future": day > today,
+        })
+
+    # Previous / next month for navigation
+    first_day = date(year, month, 1)
+    prev_month = first_day - timedelta(days=1)
+    next_month = (first_day + timedelta(days=31)).replace(day=1)
+
+    return render(request, "yoga/profile.html", {
+        "profile": profile,
+        "practices": practices[:30],
+        "practice_form": practice_form,
+        "calendar_days": calendar_days,
+        "month_name": first_day.strftime("%B"),
+        "year": year,
+        "prev_month": prev_month,
+        "next_month": next_month,
     })
+
 
 def edit_profile_view(request):
     profile = request.user.profile
