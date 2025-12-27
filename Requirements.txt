@@ -4,3 +4,9 @@ django-crispy-forms==2.4
 pillow==11.3.0
 sqlparse==0.5.3
 tzdata==2025.2
+
+djangorestframework>=3.14.0
+django-cors-headers>=4.0.0
+tensorflow>=2.13.0
+opencv-python>=4.8.0
+mediapipe>=0.10.0

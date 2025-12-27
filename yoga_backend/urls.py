@@ -1,0 +1,23 @@
+from django.urls import path
+from .views import (
+    PoseDetectionView,
+    StartSessionView,
+    EndSessionView,
+    GetAvailablePosesView,
+    SessionHistoryView
+)
+
+app_name = 'yoga_backend'
+
+urlpatterns = [
+    # Pose detection
+    path('detect/', PoseDetectionView.as_view(), name='pose-detection'),
+    
+    # Session management
+    path('session/start/', StartSessionView.as_view(), name='start-session'),
+    path('session/end/', EndSessionView.as_view(), name='end-session'),
+    path('sessions/', SessionHistoryView.as_view(), name='session-history'),
+    
+    # Utility
+    path('poses/', GetAvailablePosesView.as_view(), name='available-poses'),
+]
