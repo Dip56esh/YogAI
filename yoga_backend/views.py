@@ -6,6 +6,10 @@ from .pose_detector import get_detector
 from .models import YogaSession, PoseDetection
 import logging
 
+from django.db.models import Avg, Sum, Count
+from django.db.models.functions import Coalesce
+from datetime import timedelta
+
 logger = logging.getLogger(__name__)
 
 
@@ -231,3 +235,100 @@ class SessionHistoryView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+class UserStatsView(APIView):
+    """
+    API endpoint to get user statistics
+    
+    GET /api/yoga/user/stats/?user_id=1
+    """
+    
+    def get(self, request):
+        try:
+            user_id = request.query_params.get('user_id')
+            
+            # Get all sessions (with or without user_id)
+            if user_id:
+                sessions = YogaSession.objects.filter(user_id=user_id)
+            else:
+                # For anonymous users, get all sessions
+                sessions = YogaSession.objects.all()
+            
+            # Filter only completed sessions (those with ended_at)
+            completed_sessions = sessions.filter(ended_at__isnull=False)
+            
+            # Calculate total sessions
+            total_sessions = completed_sessions.count()
+            
+            # Calculate average accuracy
+            avg_accuracy = completed_sessions.aggregate(
+                avg_acc=Coalesce(Avg('accuracy'), 0.0)
+            )['avg_acc']
+            
+            # Calculate total hours
+            total_seconds = 0
+            for session in completed_sessions:
+                if session.started_at and session.ended_at:
+                    duration = (session.ended_at - session.started_at).total_seconds()
+                    total_seconds += duration
+            
+            total_hours = total_seconds / 3600  # Convert to hours
+            
+            # Calculate longest streak (consecutive days)
+            longest_streak = self.calculate_longest_streak(completed_sessions)
+            
+            # Get recent sessions
+            recent_sessions = completed_sessions.order_by('-started_at')[:5]
+            recent_sessions_data = []
+            for session in recent_sessions:
+                duration = (session.ended_at - session.started_at).total_seconds() if session.ended_at else 0
+                recent_sessions_data.append({
+                    'id': session.id,
+                    'pose': session.pose_name,
+                    'date': session.started_at.strftime('%Y-%m-%d'),
+                    'time': session.started_at.strftime('%H:%M'),
+                    'duration': f"{int(duration // 60)}m {int(duration % 60)}s",
+                    'accuracy': round(session.accuracy, 1)
+                })
+            
+            return Response({
+                'total_sessions': total_sessions,
+                'avg_accuracy': round(avg_accuracy, 1),
+                'total_hours': round(total_hours, 2),
+                'longest_streak': longest_streak,
+                'recent_sessions': recent_sessions_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Error getting user stats: {e}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def calculate_longest_streak(self, sessions):
+        """Calculate longest consecutive days streak"""
+        if not sessions.exists():
+            return 0
+        
+        # Get unique dates of sessions
+        session_dates = set()
+        for session in sessions:
+            if session.started_at:
+                session_dates.add(session.started_at.date())
+        
+        if not session_dates:
+            return 0
+        
+        sorted_dates = sorted(session_dates)
+        longest_streak = 1
+        current_streak = 1
+        
+        for i in range(1, len(sorted_dates)):
+            if (sorted_dates[i] - sorted_dates[i-1]).days == 1:
+                current_streak += 1
+                longest_streak = max(longest_streak, current_streak)
+            else:
+                current_streak = 1
+        
+        return longest_streak

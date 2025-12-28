@@ -20,7 +20,7 @@
           <li><a href="{% url 'yoga:poses' %}" class="hover:text-green-600">Poses</a></li>
           {% if user.is_authenticated %}
             <!-- <li><a href="{% url 'yoga:session' %}" class="hover:text-green-600">Session</a></li> -->
-            <li><a href="{% url 'yoga:stats' %}" class="hover:text-green-600">Stats</a></li>
+            <!-- <li><a href="{% url 'yoga:stats' %}" class="hover:text-green-600">Stats</a></li> -->
             <li><a href="{% url 'yoga:profile' %}" class="hover:text-green-600">Profile</a></li>
              <li>
               <a href="{% url 'yoga:logout' %}" 
@@ -49,7 +49,7 @@
 
   <!-- Footer -->
   <footer class="bg-gray-100 text-center py-4 text-sm text-gray-500 border-t mt-auto">
-    © {{ now.year }} Yoga AI
+    ©  Yoga AI
   </footer>
 
   {% block scripts %}{% endblock %}

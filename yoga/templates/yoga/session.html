@@ -12,7 +12,7 @@
       <div class="lg:col-span-3">
         <div class="bg-white rounded-lg shadow-lg overflow-hidden">
           <div class="aspect-video bg-gray-900 relative">
-            <video id="webcam" autoplay muted playsinline class="w-full h-full object-cover"></video>
+            <video id="webcam" autoplay muted playsinline class="w-full h-full object-cover" controls></video>
             <canvas id="canvas" class="hidden"></canvas>
             
             <div id="overlay" class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
@@ -54,6 +54,21 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               Switch Camera
+            </button>
+
+            <label for="videoUpload" id="uploadBtn" class="flex items-center px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Upload Video
+            </label>
+            <input type="file" id="videoUpload" accept="video/*" class="hidden">
+
+            <button id="removeVideoBtn" class="hidden items-center px-4 py-3 border border-red-300 rounded-lg text-red-700 hover:bg-red-50 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Remove Video
             </button>
           </div>
         </div>
@@ -132,6 +147,8 @@ let targetPose = null;
 let currentCameraFacing = 'user';
 let totalFrames = 0;
 let correctFrames = 0;
+let isVideoMode = false;  // NEW: Track if in video upload mode
+let uploadedVideo = null;  // NEW: Store uploaded video element
 
 // DOM Elements
 const videoEl = document.getElementById("webcam");
@@ -155,6 +172,9 @@ const switchCameraBtn = document.getElementById("switchCamera");
 const totalFramesEl = document.getElementById("totalFrames");
 const correctFramesEl = document.getElementById("correctFrames");
 const sessionAccuracyEl = document.getElementById("sessionAccuracy");
+const videoUploadInput = document.getElementById("videoUpload");  // NEW
+const uploadBtn = document.getElementById("uploadBtn");  // NEW
+const removeVideoBtn = document.getElementById("removeVideoBtn");  // NEW
 
 // Get CSRF token for Django
 function getCsrfToken() {
@@ -463,112 +483,391 @@ ${data.accuracy >= 80 ? 'Excellent work! 🌟' : data.accuracy >= 60 ? 'Good eff
 // Toggle session (start/stop)
 toggleBtn.addEventListener("click", async () => {
     if (!sessionActive) {
-        // Start session
-        
-        // Start webcam first
-        const webcamStarted = await startWebcam();
-        if (!webcamStarted) {
-            showFeedback("Failed to start webcam", "error");
-            return;
-        }
-        
-        // Start backend session
-        const sessionStarted = await startBackendSession();
-        if (!sessionStarted) {
-            stopWebcam();
-            return;
-        }
-        
-        // Update UI
-        sessionActive = true;
-        overlay.classList.add("hidden");
-        liveBadge.classList.remove("hidden");
-        accuracyIndicator.classList.remove("hidden");
-        targetPoseCard.classList.remove("hidden");
-        targetPoseName.textContent = targetPose ? targetPose.charAt(0).toUpperCase() + targetPose.slice(1).replace(/_/g, ' ') : 'Detecting...';
-        
-        toggleBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-            </svg>
-            Stop Session
-        `;
-        toggleBtn.classList.remove("bg-green-500", "hover:bg-green-600");
-        toggleBtn.classList.add("bg-red-500", "hover:bg-red-600");
-        
-        // Reset counters
-        sessionTime = 0;
-        totalFrames = 0;
-        correctFrames = 0;
-        updateSessionStats();
-        
-        // Start timer
-        timerInterval = setInterval(() => {
-            sessionTime++;
-            timerEl.textContent = formatTime(sessionTime);
-        }, 1000);
-        
-        // Start detection loop after short delay to let camera initialize
-        setTimeout(() => {
-            if (sessionActive) {
-                detectionInterval = setInterval(detectPose, DETECTION_INTERVAL);
+        // Check if in video mode or live mode
+        if (isVideoMode && uploadedVideo) {
+            // Process uploaded video
+            await processUploadedVideo();
+        } else {
+            // Start live session
+            
+            // Start webcam first
+            const webcamStarted = await startWebcam();
+            if (!webcamStarted) {
+                showFeedback("Failed to start webcam", "error");
+                return;
             }
-        }, 1000);
+            
+            // Start backend session
+            const sessionStarted = await startBackendSession();
+            if (!sessionStarted) {
+                stopWebcam();
+                return;
+            }
+            
+            // Update UI
+            sessionActive = true;
+            overlay.classList.add("hidden");
+            liveBadge.classList.remove("hidden");
+            accuracyIndicator.classList.remove("hidden");
+            targetPoseCard.classList.remove("hidden");
+            targetPoseName.textContent = targetPose ? targetPose.charAt(0).toUpperCase() + targetPose.slice(1).replace(/_/g, ' ') : 'Detecting...';
+            
+            toggleBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+                Stop Session
+            `;
+            toggleBtn.classList.remove("bg-green-500", "hover:bg-green-600");
+            toggleBtn.classList.add("bg-red-500", "hover:bg-red-600");
+            
+            // Reset counters
+            sessionTime = 0;
+            totalFrames = 0;
+            correctFrames = 0;
+            updateSessionStats();
+            
+            // Start timer
+            timerInterval = setInterval(() => {
+                sessionTime++;
+                timerEl.textContent = formatTime(sessionTime);
+            }, 1000);
+            
+            // Start detection loop after short delay to let camera initialize
+            setTimeout(() => {
+                if (sessionActive) {
+                    detectionInterval = setInterval(detectPose, DETECTION_INTERVAL);
+                }
+            }, 1000);
+        }
         
     } else {
         // Stop session
-        sessionActive = false;
-        
-        // Stop detection
-        if (detectionInterval) {
-            clearInterval(detectionInterval);
-            detectionInterval = null;
+        if (isVideoMode) {
+            await stopVideoAnalysis();
+        } else {
+            sessionActive = false;
+            
+            // Stop detection
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+            }
+            
+            // Stop timer
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            
+            // End backend session
+            await endBackendSession();
+            
+            // Stop webcam
+            stopWebcam();
+            
+            // Update UI
+            overlay.classList.remove("hidden");
+            liveBadge.classList.add("hidden");
+            accuracyIndicator.classList.add("hidden");
+            targetPoseCard.classList.add("hidden");
+            
+            toggleBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Start Session
+            `;
+            toggleBtn.classList.add("bg-green-500", "hover:bg-green-600");
+            toggleBtn.classList.remove("bg-red-500", "hover:bg-red-600");
+            
+            // Reset displays
+            timerEl.textContent = "00:00";
+            currentPoseEl.textContent = "—";
+            confidenceEl.textContent = "0";
+            confidenceBarEl.style.width = "0%";
+            
+            // Reset session variables
+            sessionId = null;
+            targetPose = null;
         }
-        
-        // Stop timer
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-        
-        // End backend session
-        await endBackendSession();
-        
-        // Stop webcam
-        stopWebcam();
-        
-        // Update UI
-        overlay.classList.remove("hidden");
-        liveBadge.classList.add("hidden");
-        accuracyIndicator.classList.add("hidden");
-        targetPoseCard.classList.add("hidden");
-        
-        toggleBtn.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Start Session
-        `;
-        toggleBtn.classList.add("bg-green-500", "hover:bg-green-600");
-        toggleBtn.classList.remove("bg-red-500", "hover:bg-red-600");
-        
-        // Reset displays
-        timerEl.textContent = "00:00";
-        currentPoseEl.textContent = "—";
-        confidenceEl.textContent = "0";
-        confidenceBarEl.style.width = "0%";
-        
-        // Reset session variables
-        sessionId = null;
-        targetPose = null;
     }
 });
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     showFeedback("Click Start Session to begin your yoga practice.", "info");
+});
+
+// Video Upload Handler
+videoUploadInput.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Check if file is a video
+    if (!file.type.startsWith('video/')) {
+        showFeedback("Please upload a valid video file.", "error");
+        return;
+    }
+    
+    // Check file size (max 100MB)
+    if (file.size > 100 * 1024 * 1024) {
+        showFeedback("Video file is too large. Maximum size is 100MB.", "error");
+        return;
+    }
+    
+    showFeedback("Loading video...", "info");
+    
+    try {
+        // Stop any active webcam session
+        if (videoEl.srcObject) {
+            stopWebcam();
+        }
+        
+        // Create object URL for the video file
+        const videoURL = URL.createObjectURL(file);
+        
+        // Set video source directly to the video element
+        videoEl.src = videoURL;
+        videoEl.srcObject = null;
+        videoEl.load();
+        
+        // Wait for video metadata to load
+        await new Promise((resolve, reject) => {
+            videoEl.onloadedmetadata = () => {
+                console.log('Video loaded:', videoEl.videoWidth, 'x', videoEl.videoHeight);
+                
+                // Set canvas size to match video
+                canvasEl.width = videoEl.videoWidth || 640;
+                canvasEl.height = videoEl.videoHeight || 480;
+                
+                resolve();
+            };
+            
+            videoEl.onerror = (e) => {
+                console.error('Video load error:', e);
+                reject(new Error('Failed to load video'));
+            };
+            
+            // Timeout after 10 seconds
+            setTimeout(() => reject(new Error('Video load timeout')), 10000);
+        });
+        
+        // Store reference
+        uploadedVideo = videoEl;
+        isVideoMode = true;
+        
+        // Hide overlay and show video
+        overlay.classList.add("hidden");
+        
+        // Pause video initially
+        videoEl.pause();
+        videoEl.currentTime = 0;
+        
+        showFeedback(`Video loaded successfully: ${file.name}. Click "Analyze Video" to start.`, "success");
+        
+        // Show remove button, hide upload button
+        uploadBtn.classList.add("hidden");
+        removeVideoBtn.classList.remove("hidden");
+        removeVideoBtn.classList.add("flex");
+        
+        // Update button text
+        toggleBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Analyze Video
+        `;
+        toggleBtn.classList.remove("bg-red-500", "hover:bg-red-600");
+        toggleBtn.classList.add("bg-green-500", "hover:bg-green-600");
+        
+        // Reset the file input so the same file can be selected again
+        videoUploadInput.value = '';
+        
+    } catch (error) {
+        console.error('Error loading video:', error);
+        showFeedback(`Failed to load video: ${error.message}. Please try another file.`, "error");
+        isVideoMode = false;
+        uploadedVideo = null;
+        videoEl.src = '';
+        overlay.classList.remove("hidden");
+    }
+});
+
+// Process uploaded video
+async function processUploadedVideo() {
+    if (!uploadedVideo || !videoEl.src) {
+        showFeedback("No video loaded.", "error");
+        return;
+    }
+    
+    // Start backend session
+    const sessionStarted = await startBackendSession();
+    if (!sessionStarted) return;
+    
+    // Update UI
+    sessionActive = true;
+    liveBadge.classList.remove("hidden");
+    liveBadge.textContent = "ANALYZING";
+    accuracyIndicator.classList.remove("hidden");
+    targetPoseCard.classList.remove("hidden");
+    targetPoseName.textContent = targetPose ? targetPose.charAt(0).toUpperCase() + targetPose.slice(1).replace(/_/g, ' ') : 'Detecting...';
+    
+    toggleBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+        </svg>
+        Stop Analysis
+    `;
+    toggleBtn.classList.remove("bg-green-500", "hover:bg-green-600");
+    toggleBtn.classList.add("bg-red-500", "hover:bg-red-600");
+    
+    // Reset counters
+    sessionTime = 0;
+    totalFrames = 0;
+    correctFrames = 0;
+    updateSessionStats();
+    
+    // Reset video to start
+    videoEl.currentTime = 0;
+    
+    // Start video playback
+    try {
+        await videoEl.play();
+    } catch (err) {
+        console.error('Error playing video:', err);
+        showFeedback("Error playing video. Please try again.", "error");
+        await stopVideoAnalysis();
+        return;
+    }
+    
+    // Start timer
+    timerInterval = setInterval(() => {
+        sessionTime++;
+        timerEl.textContent = formatTime(sessionTime);
+    }, 1000);
+    
+    showFeedback("Analyzing video... Watch the real-time feedback.", "info");
+    
+    // Process video frames
+    await analyzeVideoFrames();
+}
+
+// Analyze video frames
+async function analyzeVideoFrames() {
+    const frameRate = 2; // Process 2 frames per second
+    const interval = 1000 / frameRate;
+    
+    const processFrame = async () => {
+        if (!sessionActive || videoEl.ended) {
+            // Video finished, stop session
+            if (sessionActive) {
+                await stopVideoAnalysis();
+            }
+            return;
+        }
+        
+        // Detect pose from current frame
+        await detectPose();
+        
+        // Continue processing if session is still active
+        if (sessionActive && !videoEl.ended) {
+            setTimeout(processFrame, interval);
+        }
+    };
+    
+    // Start processing frames
+    setTimeout(processFrame, interval);
+}
+
+// Stop video analysis
+async function stopVideoAnalysis() {
+    sessionActive = false;
+    
+    // Pause video
+    if (videoEl) {
+        videoEl.pause();
+    }
+    
+    // Stop timer
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+    
+    // End backend session
+    await endBackendSession();
+    
+    // Update UI
+    liveBadge.classList.add("hidden");
+    liveBadge.textContent = "LIVE";
+    accuracyIndicator.classList.add("hidden");
+    targetPoseCard.classList.add("hidden");
+    
+    toggleBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Analyze Video
+    `;
+    toggleBtn.classList.add("bg-green-500", "hover:bg-green-600");
+    toggleBtn.classList.remove("bg-red-500", "hover:bg-red-600");
+    
+    // Reset session variables
+    sessionId = null;
+    targetPose = null;
+    
+    showFeedback("Video analysis complete! Upload another video or start a live session.", "success");
+}
+
+// Clear video mode
+function clearVideoMode() {
+    if (videoEl.src && !videoEl.srcObject) {
+        URL.revokeObjectURL(videoEl.src);
+        videoEl.src = '';
+    }
+    isVideoMode = false;
+    uploadedVideo = null;
+    overlay.classList.remove("hidden");
+    
+    // Show upload button, hide remove button
+    uploadBtn.classList.remove("hidden");
+    removeVideoBtn.classList.add("hidden");
+    removeVideoBtn.classList.remove("flex");
+    
+    toggleBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Start Session
+    `;
+    toggleBtn.classList.add("bg-green-500", "hover:bg-green-600");
+    toggleBtn.classList.remove("bg-red-500", "hover:bg-red-600");
+    
+    // Reset displays
+    timerEl.textContent = "00:00";
+    currentPoseEl.textContent = "—";
+    confidenceEl.textContent = "0";
+    confidenceBarEl.style.width = "0%";
+    
+    showFeedback("Video removed. Click Start Session to begin a live session.", "info");
+}
+
+// Remove Video Button Handler
+removeVideoBtn.addEventListener('click', async () => {
+    // If session is active, stop it first
+    if (sessionActive) {
+        await stopVideoAnalysis();
+    }
+    
+    // Clear video mode
+    clearVideoMode();
 });
 </script>
 {% endblock %}

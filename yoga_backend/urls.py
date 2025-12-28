@@ -4,7 +4,8 @@ from .views import (
     StartSessionView,
     EndSessionView,
     GetAvailablePosesView,
-    SessionHistoryView
+    SessionHistoryView,
+    UserStatsView
 )
 
 app_name = 'yoga_backend'
@@ -17,6 +18,9 @@ urlpatterns = [
     path('session/start/', StartSessionView.as_view(), name='start-session'),
     path('session/end/', EndSessionView.as_view(), name='end-session'),
     path('sessions/', SessionHistoryView.as_view(), name='session-history'),
+
+    # User statistics
+    path('user/stats/', UserStatsView.as_view(), name='user-stats'),
     
     # Utility
     path('poses/', GetAvailablePosesView.as_view(), name='available-poses'),

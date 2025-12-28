@@ -10,6 +10,8 @@ from django.utils import timezone
 from datetime import timedelta
 import calendar
 from datetime import date, datetime
+import requests
+
 
 def landing(request):
     top_poses = Pose.objects.all()[:4]
@@ -79,7 +81,40 @@ def profile_view(request):
     prev_month = first_day - timedelta(days=1)
     next_month = (first_day + timedelta(days=31)).replace(day=1)
 
-    return render(request, "yoga/profile.html", {
+    try:
+        user_id = request.user.id if request.user.is_authenticated else None
+        
+        # Call the stats API
+        api_url = request.build_absolute_uri('/api/yoga/user/stats/')
+        if user_id:
+            api_url += f'?user_id={user_id}'
+        
+        response = requests.get(api_url)
+        stats = response.json() if response.status_code == 200 else {}
+        
+    except Exception as e:
+        print(f"Error fetching stats: {e}")
+        stats = {
+            'total_sessions': 0,
+            'avg_accuracy': 0,
+            'total_hours': 0,
+            'longest_streak': 0,
+            'recent_sessions': []
+        }
+    
+    # context = {
+    #     'total_sessions': stats.get('total_sessions', 0),
+    #     'avg_accuracy': stats.get('avg_accuracy', 0),
+    #     'total_hours': stats.get('total_hours', 0),
+    #     'longest_streak': stats.get('longest_streak', 0),
+    #     'recent_sessions': stats.get('recent_sessions', []),
+    #     'user': request.user
+    # } 
+
+    # return render(request, 'yoga/profile.html', context)
+
+
+    return render(request, "yoga/profile.html",{
         "profile": profile,
         "practices": practices[:30],
         "practice_form": practice_form,
@@ -88,7 +123,16 @@ def profile_view(request):
         "year": year,
         "prev_month": prev_month,
         "next_month": next_month,
+        'total_sessions': stats.get('total_sessions', 0),
+        'avg_accuracy': stats.get('avg_accuracy', 0),
+        'total_hours': stats.get('total_hours', 0),
+        'longest_streak': stats.get('longest_streak', 0),
+        'recent_sessions': stats.get('recent_sessions', []),
+        'user': request.user
+
     })
+
+
 
 
 def edit_profile_view(request):
