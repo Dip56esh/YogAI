@@ -1,81 +1,85 @@
 import cv2
 import numpy as np
-import mediapipe as mp
 import os
 from django.conf import settings
 import logging
+from .pose_detectors import get_pose_detector, is_pose_supported
 
 logger = logging.getLogger(__name__)
 
 
 class YogaPoseDetector:
     """
-    Yoga pose detection using MediaPipe for keypoint extraction
-    and a trained model for classification
+    Main yoga pose detection class that routes to specific pose detectors
     """
     
     def __init__(self):
-        self.model = None
-        self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            smooth_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
+        # Import MediaPipe here (lazy loading)
+        try:
+            import mediapipe as mp
+            self.mp = mp
+            self.mp_pose = mp.solutions.pose
+            self.pose = self.mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
+                smooth_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
+            )
+            logger.info("MediaPipe Pose initialized successfully")
+        except (ImportError, AttributeError) as e:
+            logger.error(f"MediaPipe initialization failed: {e}")
+            self.mp = None
+            self.pose = None
         
-        # Define yoga pose classes (update based on your model)
+        # Current pose detector
+        self.current_detector = None
+        self.current_pose = None
+        
+        # All available poses
         self.pose_classes = [
-            'downdog',
-            'goddess', 
             'plank',
             'tree',
-            'warrior2'
+            'warrior2',
+            'downdog',
+            'goddess'
         ]
-        
-        self._load_model()
     
-    def _load_model(self):
-        """Load the trained yoga pose classification model"""
-        try:
-            from tensorflow import keras
-            model_path = os.path.join(
-                settings.BASE_DIR, 
-                'yoga_backend', 
-                'trained_models', 
-                'yoga_model.h5'
-            )
-            
-            if os.path.exists(model_path):
-                self.model = keras.models.load_model(model_path)
-                logger.info(f"Model loaded successfully from {model_path}")
-            else:
-                logger.warning(f"Model file not found at {model_path}")
-                logger.warning("Pose detection will work in demo mode")
-        except Exception as e:
-            logger.error(f"Error loading model: {e}")
-            logger.warning("Running in demo mode without model")
+    def set_target_pose(self, pose_name):
+        """
+        Set the target pose and load appropriate detector
+        """
+        pose_name = pose_name.lower()
+        
+        if pose_name != self.current_pose:
+            try:
+                if is_pose_supported(pose_name):
+                    self.current_detector = get_pose_detector(pose_name)
+                    self.current_pose = pose_name
+                    logger.info(f"Loaded detector for {pose_name}")
+                else:
+                    logger.warning(f"No specific detector for {pose_name}, using default")
+                    self.current_detector = None
+                    self.current_pose = pose_name
+            except Exception as e:
+                logger.error(f"Error loading detector for {pose_name}: {e}")
+                self.current_detector = None
     
     def extract_keypoints(self, image):
         """
         Extract pose keypoints using MediaPipe
-        
-        Args:
-            image: OpenCV image (BGR format)
-            
-        Returns:
-            numpy array of keypoints or None if no pose detected
         """
-        try:
-            # Convert BGR to RGB
-            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if not self.pose:
+            logger.warning("MediaPipe Pose not initialized")
+            return None, None
             
-            # Process the image
+        try:
+            image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             results = self.pose.process(image_rgb)
             
+            logger.info(f"MediaPipe results: pose_landmarks = {results.pose_landmarks is not None}")
+            
             if results.pose_landmarks:
-                # Extract all landmarks
                 landmarks = []
                 for landmark in results.pose_landmarks.landmark:
                     landmarks.extend([
@@ -84,108 +88,122 @@ class YogaPoseDetector:
                         landmark.z,
                         landmark.visibility
                     ])
-                return np.array(landmarks)
+                logger.info(f"Extracted {len(landmarks)} landmark values")
+                return results, np.array(landmarks)
+            else:
+                logger.warning("No pose landmarks detected in frame")
             
-            return None
+            return results, None
         except Exception as e:
-            logger.error(f"Error extracting keypoints: {e}")
-            return None
+            logger.error(f"Error extracting keypoints: {e}", exc_info=True)
+            return None, None
     
-    def predict_pose(self, keypoints):
+    def predict_pose(self, image, target_pose=None):
         """
-        Predict yoga pose from keypoints
-        
-        Args:
-            keypoints: numpy array of pose keypoints
-            
-        Returns:
-            dict with prediction results
+        Predict yoga pose from image using specific detector
         """
-        if self.model is None:
-            # Demo mode - return random predictions for testing
-            import random
-            pose = random.choice(self.pose_classes)
-            confidence = random.uniform(0.6, 0.95)
-            return {
-                'success': True,
-                'pose': pose,
-                'confidence': confidence,
-                'is_correct': confidence > 0.7,
-                'mode': 'demo'
-            }
+        # Set target pose if provided
+        if target_pose:
+            logger.info(f"Setting target pose to: {target_pose}")
+            self.set_target_pose(target_pose)
         
-        try:
-            # Reshape keypoints for model input
-            keypoints_input = keypoints.reshape(1, -1)
-            
-            # Make prediction
-            predictions = self.model.predict(keypoints_input, verbose=0)
-            predicted_class = np.argmax(predictions[0])
-            confidence = float(predictions[0][predicted_class])
-            
-            # Get all prediction scores
-            all_predictions = {
-                self.pose_classes[i]: float(predictions[0][i])
-                for i in range(len(self.pose_classes))
-            }
-            
-            return {
-                'success': True,
-                'pose': self.pose_classes[predicted_class],
-                'confidence': confidence,
-                'is_correct': confidence > 0.7,
-                'all_predictions': all_predictions,
-                'mode': 'model'
-            }
-        except Exception as e:
-            logger.error(f"Error making prediction: {e}")
+        # Extract keypoints
+        logger.info("Extracting keypoints from image...")
+        mp_results, keypoints = self.extract_keypoints(image)
+        
+        if keypoints is None or mp_results is None:
+            logger.warning("Failed to extract keypoints - no pose detected")
             return {
                 'success': False,
-                'error': str(e)
+                'message': 'No pose detected',
+                'pose': None,
+                'confidence': 0
             }
-    
-    def process_frame(self, frame_data):
-        """
-        Process a base64 encoded frame
         
-        Args:
-            frame_data: base64 encoded image string
-            
-        Returns:
-            dict with detection results
+        # Use specific detector if available
+        if self.current_detector:
+            logger.info(f"Using specific detector for {self.current_pose}")
+            try:
+                result = self.current_detector.detect(
+                    mp_results,
+                    image,
+                    timestamp=0
+                )
+                
+                logger.info(f"Detector result: stage={result.get('stage')}, is_correct={result.get('is_correct')}")
+                
+                return {
+                    'success': True,
+                    'pose': self.current_pose,
+                    'stage': result.get('stage', 'unknown'),
+                    'is_correct': result.get('is_correct', False),
+                    'confidence': result.get('probability', 0),
+                    'has_error': result.get('has_error', False),
+                    'matches_target': result.get('is_correct', False),
+                    'mode': 'specific_detector'
+                }
+            except Exception as e:
+                logger.error(f"Error in specific detector: {e}", exc_info=True)
+                return {
+                    'success': False,
+                    'error': str(e)
+                }
+        
+        # Fallback to demo mode if no specific detector
+        logger.warning(f"No specific detector for {self.current_pose}, using demo mode")
+        import random
+        confidence = random.uniform(0.6, 0.95)
+        return {
+            'success': True,
+            'pose': self.current_pose or random.choice(self.pose_classes),
+            'confidence': confidence,
+            'is_correct': confidence > 0.7,
+            'mode': 'demo'
+        }
+    
+    def process_frame(self, frame_data, target_pose=None):
+        """
+        Process base64 encoded frame
         """
         try:
             import base64
             
-            # Decode base64 image
+            logger.info(f"Processing frame - Target pose: {target_pose}")
+            
+            if not frame_data:
+                logger.error("No frame data provided")
+                return {
+                    'success': False,
+                    'message': 'No frame data provided'
+                }
+            
             if ',' in frame_data:
                 frame_data = frame_data.split(',')[1]
+            
+            logger.info(f"Decoding frame data (length: {len(frame_data)})")
             
             img_data = base64.b64decode(frame_data)
             nparr = np.frombuffer(img_data, np.uint8)
             image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             if image is None:
+                logger.error("Failed to decode image")
                 return {
                     'success': False,
                     'message': 'Invalid image data'
                 }
             
-            # Extract keypoints
-            keypoints = self.extract_keypoints(image)
+            logger.info(f"Image decoded successfully: shape={image.shape}")
+            logger.info(f"Calling predict_pose with target: {target_pose}")
             
-            if keypoints is None:
-                return {
-                    'success': False,
-                    'message': 'No pose detected in frame'
-                }
+            result = self.predict_pose(image, target_pose)
             
-            # Predict pose
-            result = self.predict_pose(keypoints)
+            logger.info(f"Prediction result: {result}")
+            
             return result
             
         except Exception as e:
-            logger.error(f"Error processing frame: {e}")
+            logger.error(f"Error processing frame: {e}", exc_info=True)
             return {
                 'success': False,
                 'error': str(e)
@@ -193,16 +211,21 @@ class YogaPoseDetector:
     
     def __del__(self):
         """Cleanup"""
-        if hasattr(self, 'pose'):
-            self.pose.close()
+        if hasattr(self, 'pose') and self.pose:
+            try:
+                self.pose.close()
+            except:
+                pass
 
 
-# Global instance (singleton pattern)
+# Global instance
 _detector_instance = None
+
 
 def get_detector():
     """Get or create the global detector instance"""
     global _detector_instance
     if _detector_instance is None:
+        logger.info("Creating new YogaPoseDetector instance")
         _detector_instance = YogaPoseDetector()
     return _detector_instance

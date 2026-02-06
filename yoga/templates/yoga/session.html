@@ -251,7 +251,7 @@ switchCameraBtn.addEventListener("click", async () => {
 // Start backend session
 async function startBackendSession() {
     // Default pose - you can change this or make it dynamic later
-    const defaultPose = 'tree';
+    const defaultPose = 'plank';
     
     try {
         const response = await fetch(`${API_BASE_URL}/session/start/`, {
@@ -308,17 +308,16 @@ async function detectPose() {
     if (!sessionActive || !videoEl.srcObject) return;
     
     try {
-        // Check if video is ready
-        if (videoEl.readyState < 2) {
-            console.log('Video not ready yet');
-            return;
-        }
-        
         // Draw current frame to canvas
         ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
         
-        // Convert to base64
+        // Get frame as base64
         const frameData = canvasEl.toDataURL('image/jpeg', 0.7);
+        
+        console.log('=== DETECTION REQUEST ===');
+        console.log('Target Pose:', targetPose);
+        console.log('Session ID:', sessionId);
+        console.log('Frame Data Length:', frameData.length);
         
         // Send to backend
         const response = await fetch(`${API_BASE_URL}/detect/`, {
@@ -334,16 +333,16 @@ async function detectPose() {
             })
         });
         
+        console.log('Response Status:', response.status);
+        
         const result = await response.json();
+        console.log('Detection Result:', result);
+        console.log('========================');
+        
         handleDetectionResult(result);
         
     } catch (error) {
         console.error('Detection error:', error);
-        // Show error but don't stop the session
-        handleDetectionResult({
-            success: false,
-            message: "Detection error occurred"
-        });
     }
 }
 
