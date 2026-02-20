@@ -1,0 +1,67 @@
+{% extends "yoga/base.html" %}
+{% block title %}Edit Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-16 bg-white shadow-lg rounded-lg p-8 border border-gray-200">
+
+  <!-- Username -->
+  <h2 class="text-2xl font-bold text-center text-gray-800 mb-6">{{ user.username }}</h2>
+
+  <!-- Avatar Preview + Upload -->
+  <div class="flex flex-col items-center mb-6">
+    <img id="avatarPreview" 
+         src="{% if user.profile.avatar %}{{ user.profile.avatar.url }}{% endif %}" 
+         alt="Avatar" 
+         class="w-32 h-32 rounded-full object-cover border-2 border-gray-300 mb-4 cursor-pointer hover:opacity-80 transition duration-300">
+
+    <!-- Hidden file input -->
+    <input type="file" name="avatar" id="avatarInput" class="hidden">
+
+  </div>
+  
+  <!-- Bio Field -->
+  <form method="POST" enctype="multipart/form-data" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-gray-700 font-medium mb-1 ">Bio</label>
+      {{ form.bio }}
+    </div>
+
+    <button type="submit" 
+            class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium shadow-md transition duration-300">
+      Save Changes
+    </button>   
+  </form>
+<!-- Back link   -->
+  <p class="text-center mt-6">
+    <a href="{% url 'yoga:profile' %}" 
+       class="text-green-600 hover:underline font-medium">
+       ← Back to Profile
+    </a>
+  </p>
+
+</div>
+
+<!-- JS for avatar click and live preview -->
+<script>
+  const avatarInput = document.getElementById("avatarInput");
+  const avatarPreview = document.getElementById("avatarPreview");
+
+  // Click avatar image to open file picker
+  avatarPreview.addEventListener("click", function() {
+    avatarInput.click();
+  });
+
+  // Handle file selection and live preview
+  avatarInput.addEventListener("change", function() {
+    const file = this.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        avatarPreview.setAttribute("src", e.target.result);
+      }
+      reader.readAsDataURL(file);
+    }
+  });
+</script>
+{% endblock %}
